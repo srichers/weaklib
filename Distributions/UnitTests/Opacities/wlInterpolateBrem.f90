@@ -20,17 +20,7 @@ PROGRAM wlInterpolateBrem
   USE wlOpacityTableIOModuleHDF, ONLY: &
     ReadOpacityTableHDF, &
     WriteOpacityTableHDF
-  USE wlGridModule, ONLY: &
-    GridType, &
-    AllocateGrid, &
-    DescribeGrid, &
-    MakeLogGrid
-  USE wlExtPhysicalConstantsModule, ONLY: kMeV, ca, cv
-  USE wlExtNumericalModule, ONLY: pi, half, twpi, zero
   USE HDF5
-  USE prb_cntl_module, ONLY: &
-      i_aeps, iaefnp, rhoaefnp, iaence, iaenct, roaenct, &
-      edmpa, edmpe, iaenca
   USE, INTRINSIC :: iso_fortran_env, ONLY : stdin=>input_unit, &
                                             stdout=>output_unit, &
                                             stderr=>error_unit
@@ -48,10 +38,6 @@ PROGRAM wlInterpolateBrem
   TYPE(OpacityTableType) :: OpacityTable
 
   !-------- variables for reading parameters data ---------------------------
-  REAL(dp), DIMENSION(:), ALLOCATABLE     :: Inte_rho, Inte_T, &
-                                             Inte_Ye, Inte_cmpe, database
-  CHARACTER(LEN=100)                      :: Format1, Format2, Format3
-  !CHARACTER(LEN=30)                       :: a
   INTEGER                                 :: i, datasize, icmpe
 
   !-------- variables for output -------------------------------------------
@@ -61,8 +47,6 @@ PROGRAM wlInterpolateBrem
   INTEGER(HSIZE_T), DIMENSION(3)          :: datasize3d
   INTEGER(HSIZE_T), DIMENSION(4)          :: datasize4d
   
-  CHARACTER(256)                          :: WriteTableName
-
   !-------- local variables -------------------------------------------------
   CHARACTER(128)                          :: FileName
 
@@ -70,8 +54,6 @@ PROGRAM wlInterpolateBrem
   INTEGER                                 :: k, kp
   INTEGER                                 :: idxRho, idxT, idxYe, idxEta 
   REAL(dp)                                :: dRho, dT, dYe, dEta
-  INTEGER                                 :: idxRho_Lo, idxT_Lo, idxYe_Lo, idxEta_Lo 
-  REAL(dp)                                :: dRho_Lo, dT_Lo, dYe_Lo, dEta_Lo
   INTEGER                                 :: i_r, t_m
 
   INTEGER                                 :: nOpac_EmAb
@@ -87,7 +69,13 @@ PROGRAM wlInterpolateBrem
 
   REAL(dp)                                :: rho, T, ye, eta
 
-  REAL(dp)   :: InterpValue
+  REAL(dp)                                :: xp, xn
+  REAL(dp), PARAMETER                     :: coef_np  = 28.d0/3.d0
+
+  REAL(dp)   :: InterpValue, InterpValue_xp, InterpValue_xn, InterpValue_xpxn
+
+  INTEGER    :: idxRho_xp, idxRho_xn, idxRho_xpxn
+  REAL(dp)   :: dRho_xp, dRho_xn, dRho_xpxn
 
   INTEGER, PARAMETER :: n_rows = 213
   INTEGER, PARAMETER :: n_cols = 4
@@ -96,14 +84,10 @@ PROGRAM wlInterpolateBrem
   INTEGER :: n, n_r
 
   REAL(dp), DIMENSION(:,:,:), ALLOCATABLE :: Scat_Brem_Interp
+  REAL(dp), DIMENSION(:,:,:), ALLOCATABLE :: Scat_Brem_Interp_Decomp
 
   REAL(dp), DIMENSION(:,:),   ALLOCATABLE :: EOS_quantities
 
-  !local variables for table building
-
-  REAL(dp)                :: energy, TMeV, Z, A, &
-                             chem_e, chem_n, chem_p, xheavy, xn, &
-                             xp, xhe, bb, minvar 
 
   REAL(dp), PARAMETER                   :: brem_rho_min = 1.0d+07 !switch Bremsstrahlung off below rho_min
   REAL(dp), PARAMETER                   :: brem_rho_max = 1.0d+15 !switch Bremsstrahlung off above rho_max
@@ -164,6 +148,7 @@ PROGRAM wlInterpolateBrem
 
    ! set up OpacityTableTypeBrem 
   ALLOCATE(Scat_Brem_Interp(nPointsE,nPointsE,n_rows))
+  ALLOCATE(Scat_Brem_Interp_Decomp(nPointsE,nPointsE,n_rows))
 
 
   ASSOCIATE &
@@ -196,21 +181,82 @@ PROGRAM wlInterpolateBrem
       T   = TS_profile(n_r,3)
       Ye  = TS_profile(n_r,4)
 
+
       CALL GetIndexAndDelta( LOG10(rho), LOG10(OpacityTable % TS % States (iRho) % Values), idxRho, dRho )
       CALL GetIndexAndDelta( LOG10(T),   LOG10(OpacityTable % TS % States (iT) % Values), idxT, dT )
+      CALL GetIndexAndDelta( Ye,         OpacityTable % TS % States (iYe) % Values, idxYe, dYe )
+
+      xp = LinearInterp_Array_Point(idxRho, idxT, idxYe, dRho, dT, dYe,    &
+                                            DVOffs(Indices % iProtonMassFraction), &
+                                            DVar(Indices % iProtonMassFraction) % Values)
+
+      xn = LinearInterp_Array_Point(idxRho, idxT, idxYe, dRho, dT, dYe,     &
+                                            DVOffs(Indices % iNeutronMassFraction), &
+                                            DVar(Indices % iNeutronMassFraction) % Values)
+      IF(rho*xp > minval(OpacityTable % TS % States (iRho) % Values)) THEN
+        CALL GetIndexAndDelta( LOG10(rho*xp), LOG10(OpacityTable % TS % States (iRho) % Values), idxRho_xp, dRho_xp )
+      ELSE
+        idxRho_xp = -1
+        dRho_xp = 0.d0
+      END IF
+
+      IF(rho*xn > minval(OpacityTable % TS % States (iRho) % Values)) THEN
+        CALL GetIndexAndDelta( LOG10(rho*xn), LOG10(OpacityTable % TS % States (iRho) % Values), idxRho_xp, dRho_xp )
+      ELSE
+        idxRho_xn = -1
+        dRho_xn = 0.d0
+      END IF
+
+      IF(rho*SQRT( ABS( xn * xp ) + 1d-100 ) > minval(OpacityTable % TS % States (iRho) % Values)) THEN
+        CALL GetIndexAndDelta( LOG10(rho*SQRT( ABS( xn * xp ) + 1d-100 )), & 
+                               LOG10(OpacityTable % TS % States (iRho) % Values), idxRho_xpxn, dRho_xpxn )
+      ELSE
+        idxRho_xpxn = -1
+        dRho_xpxn = 0.d0
+      END IF
 
       DO kp = 1, nPointsE
         DO k = 1, nPointsE
 
 
           DO t_m = 1, nMom_Brem
-            InterpValue = LinearInterp_Array_Point( kp, k, idxRho, idxT, dRho, dT, &
-                                                    OpacityTable % Scat_Brem % Offsets(1,t_m),       &
-                                                    OpacityTable % Scat_Brem % Kernel(1) % Values(:,:,t_m,:,:))
+            InterpValue      = LinearInterp_Array_Point( kp, k, idxRho, idxT, dRho, dT, &
+                                                         OpacityTable % Scat_Brem % Offsets(1,t_m),       &
+                                                         OpacityTable % Scat_Brem % Kernel(1) % Values(:,:,t_m,:,:))
+
+            IF(idxRho_xp > 0) THEN
+              InterpValue_xp = LinearInterp_Array_Point( kp, k, idxRho_xp, idxT, dRho_xp, dT, &
+                                                         OpacityTable % Scat_Brem % Offsets(1,t_m),       &
+                                                         OpacityTable % Scat_Brem % Kernel(1) % Values(:,:,t_m,:,:))
+            ELSE
+              InterpValue_xp = 0.d0
+            END IF
+
+            IF(idxRho_xn > 0) THEN
+              InterpValue_xn = LinearInterp_Array_Point( kp, k, idxRho_xn, idxT, dRho_xn, dT, &
+                                                         OpacityTable % Scat_Brem % Offsets(1,t_m),       &
+                                                         OpacityTable % Scat_Brem % Kernel(1) % Values(:,:,t_m,:,:))
+            ELSE
+              InterpValue_xpxn = 0.d0
+            END IF
+
+            IF(idxRho_xpxn > 0) THEN
+              InterpValue_xpxn = LinearInterp_Array_Point( kp, k, idxRho_xpxn, idxT, dRho_xpxn, dT, &
+                                                           OpacityTable % Scat_Brem % Offsets(1,t_m),       &
+                                                           OpacityTable % Scat_Brem % Kernel(1) % Values(:,:,t_m,:,:))
+            ELSE
+              InterpValue_xpxn = 0.d0
+            END IF
+
 
             Scat_Brem_Interp(kp,k,n_r) = InterpValue
 
-            IF(ieee_is_nan(InterpValue)) n_errors = n_errors + 1 
+            Scat_Brem_Interp_Decomp(kp,k,n_r) = InterpValue_xp + InterpValue_xn + coef_np * InterpValue_xpxn
+
+            IF(ieee_is_nan(InterpValue))      n_errors = n_errors + 1 
+            IF(ieee_is_nan(InterpValue_xp))   n_errors = n_errors + 1 
+            IF(ieee_is_nan(InterpValue_xn))   n_errors = n_errors + 1 
+            IF(ieee_is_nan(InterpValue_xpxn)) n_errors = n_errors + 1 
 
           END DO
         END DO
@@ -233,7 +279,8 @@ PROGRAM wlInterpolateBrem
 
   datasize3d = [nPointsE,nPointsE,n_rows]
 
-  CALL WriteHDF("Brem_s_a_interp", Scat_Brem_Interp(:,:,:), group_id, datasize3d)
+  CALL WriteHDF("Brem_s_a_interp",        Scat_Brem_Interp(:,:,:), group_id, datasize3d)
+  CALL WriteHDF("Brem_s_a_interp_decomp", Scat_Brem_Interp_Decomp(:,:,:), group_id, datasize3d)
 
 
   CALL CloseGroupHDF( group_id ) 
