@@ -290,7 +290,8 @@ PROGRAM wlInterpolateBrem
 
   CALL DeAllocateOpacityTable( OpacityTable )
 
-  IF(ALLOCATED(Scat_Brem_Interp)) DEALLOCATE(Scat_Brem_Interp)
+  IF(ALLOCATED(Scat_Brem_Interp))        DEALLOCATE(Scat_Brem_Interp)
+  IF(ALLOCATED(Scat_Brem_Interp_Decomp)) DEALLOCATE(Scat_Brem_Interp_Decomp)
 
   IF(ALLOCATED(EOS_quantities))   DEALLOCATE(EOS_quantities)
 
