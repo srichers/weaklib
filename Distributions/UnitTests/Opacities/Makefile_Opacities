@@ -8,12 +8,14 @@ all: wlOpacityFieldsTest \
      wlInterpolateIso \
      wlInterpolateNES \
      wlInterpolatePair \
+     wlInterpolateBrem \
      wlOpacityTableResolutionTest
 
 Interpolations: wlInterpolateAb \
                 wlInterpolateIso \
                 wlInterpolateNES \
-                wlInterpolatePair
+                wlInterpolatePair \
+                wlInterpolateBrem
 
 wlOpacityFieldsTest: \
 	$(weaklib) wlOpacityFieldsTest.o
@@ -67,6 +69,12 @@ wlInterpolatePair: \
         $(Weaklib_External) wlInterpolatePair.o
 	$(FLINKER) $(FLAGS) -o wlInterpolatePair_$(MACHINE) \
         $(Weaklib_External) wlInterpolatePair.o \
+        $(LIBRARIES)
+
+wlInterpolateBrem: \
+        $(Weaklib_External) wlInterpolateBrem.o
+	$(FLINKER) $(FLAGS) -o wlInterpolateBrem_$(MACHINE) \
+        $(Weaklib_External) wlInterpolateBrem.o \
         $(LIBRARIES)
 
 wlOpacityTableResolutionTest: \
