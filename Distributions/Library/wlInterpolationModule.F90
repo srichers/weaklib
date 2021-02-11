@@ -268,6 +268,12 @@ CONTAINS
           * ( - ddX2 * p001 + ddX2 * p101   &
               -  dX2 * p011 +  dX2 * p111 )
 
+!Alterntively, we could calculate this as:
+
+    dTrilineardX1 &
+      = Bilinear(p100, p110, p101, p111, dX2, dX3) &
+      - Bilinear(p000, p010, p001, p011, dX2, dX3)
+
     RETURN
   END FUNCTION dTriLineardX1
 
@@ -298,6 +304,12 @@ CONTAINS
            * ( - ddX1 * p001 - dX1 * p101   &
                + ddX1 * p011 + dX1 * p111 )
 
+!Alterntively, we could calculate this as:
+
+    dTrilineardX2 &
+      = Bilinear(p010, p110, p011, p111, dX1, dX3) &
+      - Bilinear(p000, p100, p001, p101, dX1, dX3)
+
     RETURN
   END FUNCTION dTriLineardX2
 
@@ -325,6 +337,12 @@ CONTAINS
         - ddX1 *  dX2 * p010 - dX1 *  dX2 * p110 &
         + ddX1 * ddX2 * p001 + dX1 * ddX2 * p101 &
         + ddX1 *  dX2 * p011 + dX1 *  dX2 * p111
+
+!Alterntively, we could calculate this as:
+
+    dTrilineardX3 &
+      = Bilinear(p001, p101, p011, p111, dX1, dX2) &
+      - Bilinear(p000, p100, p010, p110, dX1, dX2)
 
     RETURN
   END FUNCTION dTriLineardX3
@@ -1913,7 +1931,7 @@ CONTAINS
           - Offset
 
       Derivative(i,1) &
-        = ( (Interpolant(i) ) * alpha(1) & 
+        = ( (Interpolant(i) + Offset) * alpha(1) & 
             * ( (1.0_dp - delta(3)) * ( (delta(2) - 1.0_dp) * p000   &
                                     +  ( 1.0_dp - delta(2)) * p100   &
                                     -             delta(2)  * p010   &
@@ -1924,7 +1942,7 @@ CONTAINS
                                     +             delta(2)  * p111 ) ) )
 
       Derivative(i,2) &
-        = ( ( Interpolant(i) ) * alpha(2) &
+        = ( ( Interpolant(i) + Offset) * alpha(2) &
               * ( (1.0_dp - delta(3) ) * ( (delta(1) - 1.0_dp) * p000   &
                                        -             delta(1)  * p100   &
                                        +  ( 1.0_dp - delta(1)) * p010   &
@@ -1935,7 +1953,7 @@ CONTAINS
                                        +             delta(1)  * p111 ) ) )
 
       Derivative(i,3) &
-        = ( ( Interpolant(i) ) * alpha(3) &
+        = ( ( Interpolant(i) +Offset) * alpha(3) &
             * ( ( (delta(1) - 1.0_dp)) * (1.0_dp - delta(2)) * p000   &
                 -            delta(1)  * (1.0_dp - delta(2)) * p100   &
                 - ( 1.0_dp - delta(1)) *           delta(2)  * p010   &
@@ -1998,17 +2016,17 @@ CONTAINS
                 p001, p101, p011, p111, dD, dT, dY ) ) - OS
 
       Derivative(iP,1) &
-        = Interpolant(iP) * aD &
+        = (Interpolant(iP) + OS) * aD &
             * dTriLineardX1 &
                 ( p000, p100, p010, p110, p001, p101, p011, p111, dT, dY )
 
       Derivative(iP,2) &
-        = Interpolant(iP) * aT &
+        = (Interpolant(iP) + OS) * aT &
             * dTriLineardX2 &
                 ( p000, p100, p010, p110, p001, p101, p011, p111, dD, dY )
 
       Derivative(iP,3) &
-        = Interpolant(iP) * aY &
+        = (Interpolant(iP) + OS) * aY &
             * dTriLineardX3 &
                 ( p000, p100, p010, p110, p001, p101, p011, p111, dD, dT )
 
@@ -2068,17 +2086,17 @@ CONTAINS
               p001, p101, p011, p111, dD, dT, dY ) ) - OS
 
     Derivative(1) &
-      = Interpolant * aD &
+      = (Interpolant + OS) * aD &
           * dTriLineardX1 &
               ( p000, p100, p010, p110, p001, p101, p011, p111, dT, dY )
 
     Derivative(2) &
-      = Interpolant * aT &
+      = (Interpolant + OS) * aT &
           * dTriLineardX2 &
               ( p000, p100, p010, p110, p001, p101, p011, p111, dD, dY )
 
     Derivative(3) &
-      = Interpolant * aY &
+      = (Interpolant + OS) * aY &
           * dTriLineardX3 &
               ( p000, p100, p010, p110, p001, p101, p011, p111, dD, dT )
 
@@ -2221,17 +2239,17 @@ CONTAINS
                   dE(i), dE(j), dT, dX ) ) - OS
 
         DerivativeT(i,j,l) &
-          = Interpolant(i,j,l) * aT &
-              * ( Trilinear( p0000, p1000, p0100, p1100, p0001, p1001, p0101, p1101, &
-                             dE(i), dE(j), dX ) &
-                  - Trilinear( p0010, p1010, p0110, p1110, p0011, p1011, p0111, p1111, &
+          = (Interpolant(i,j,l) + OS) * aT &
+              * ( - Trilinear( p0000, p1000, p0100, p1100, p0001, p1001, p0101, p1101, &
+                               dE(i), dE(j), dX ) &
+                  + Trilinear( p0010, p1010, p0110, p1110, p0011, p1011, p0111, p1111, &
                                dE(i), dE(j), dX ) )
 
         DerivativeX(i,j,l) &
-          = Interpolant(i,j,l) * aX &
-              * ( Trilinear( p0000, p1000, p0100, p1100, p0010, p1010, p0110, p1110, &
-                             dE(i), dE(j), dT ) &
-                  - Trilinear( p0001, p1001, p0101, p1101, p0011, p1011, p0111, p1111, &
+          = (Interpolant(i,j,l) + OS) * aX &
+              * ( - Trilinear( p0000, p1000, p0100, p1100, p0010, p1010, p0110, p1110, &
+                               dE(i), dE(j), dT ) &
+                  + Trilinear( p0001, p1001, p0101, p1101, p0011, p1011, p0111, p1111, &
                                dE(i), dE(j), dT ) )
 
       END DO
@@ -2319,14 +2337,14 @@ CONTAINS
                 dE(i), dE(j), dT, dX ) ) - OS
 
       DerivativeT(i,j) &
-        = Interpolant(i,j) * aT &
+        = (Interpolant(i,j) + OS) * aT &
             * ( Trilinear( p0010, p1010, p0110, p1110, &
                            p0011, p1011, p0111, p1111, dE(i), dE(j), dX ) &
               - Trilinear( p0000, p1000, p0100, p1100, &
                            p0001, p1001, p0101, p1101, dE(i), dE(j), dX ) )
 
       DerivativeX(i,j) &
-        = Interpolant(i,j) * aX &
+        = (Interpolant(i,j) + OS) * aX &
             * ( Trilinear( p0001, p1001, p0101, p1101, &
                            p0011, p1011, p0111, p1111, dE(i), dE(j), dT ) &
               - Trilinear( p0000, p1000, p0100, p1100, &
@@ -2426,12 +2444,12 @@ CONTAINS
           = 10.0d0**( BiLinear( p00, p10, p01, p11, dT, dX ) ) - OS
 
         DerivativeT(i,j,k) &
-          = Interpolant(i,j,k) * aT &
-              * ( Linear( p00, p01, dX ) - Linear( p10, p11, dX ) )
+          = (Interpolant(i,j,k) + OS) * aT &
+              * ( - Linear( p00, p01, dX ) + Linear( p10, p11, dX ) )
 
         DerivativeX(i,j,k) &
-          = Interpolant(i,j,k) * aX &
-              * ( Linear( p00, p10, dT ) - Linear( p01, p11, dT ) )
+          = (Interpolant(i,j,k) + OS) * aX &
+              * ( - Linear( p00, p10, dT ) + Linear( p01, p11, dT ) )
 
       END DO
     END DO
@@ -2483,12 +2501,12 @@ CONTAINS
           = 10.0d0**( BiLinear( p00, p10, p01, p11, dT, dX ) ) - OS
 
         DerivativeT(i,j) &
-          = Interpolant(i,j) * aT &
-              * ( Linear( p00, p01, dX ) - Linear( p10, p11, dX ) )
+          = (Interpolant(i,j) + OS) * aT &
+              * ( - Linear( p00, p01, dX ) + Linear( p10, p11, dX ) )
 
         DerivativeX(i,j) &
-          = Interpolant(i,j) * aX &
-              * ( Linear( p00, p10, dT ) - Linear( p01, p11, dT ) )
+          = (Interpolant(i,j) + OS) * aX &
+              * ( - Linear( p00, p10, dT ) + Linear( p01, p11, dT ) )
 
       END DO
     END DO
@@ -2676,7 +2694,7 @@ CONTAINS
       END IF
 
       Derivative(i,1) &  ! E
-        = ( Interpolant(i) ) * alpha(1) &
+        = ( Interpolant(i) + Offset) * alpha(1) &
           * ( (1.0_dp - delta(4)) * ( (1.0_dp - delta(3) ) * &
                                       ( ( delta(2) - 1.0_dp )  * p0000   &
                                       + ( 1.0_dp   - delta(2)) * p1000   &
@@ -2699,7 +2717,7 @@ CONTAINS
                                                   + delta(2)   * p1111)) )
      
       Derivative(i,2) &  ! rho
-        = ( Interpolant(i) ) * alpha(2) &
+        = ( Interpolant(i) + Offset) * alpha(2) &
           * ( &
             (1.0_dp - delta(4)) &
               * (   (1.0_dp - delta(3)) * &
@@ -2737,7 +2755,7 @@ CONTAINS
                                                 delta(1)  * p1111 ) )
 
       Derivative(i,3) &  ! T
-        = ( Interpolant(i) )  * alpha(3) &
+        = ( Interpolant(i) + Offset)  * alpha(3) &
           * ( (1.0_dp - delta(4)) &
               * (      (  (delta(2) - 1.0_dp) * (1.0_dp - delta(1)) * p0000   &
                   +       (delta(2) - 1.0_dp) *           delta(1)  * p1000   &
@@ -2758,7 +2776,7 @@ CONTAINS
                   +                 delta(2)  *           delta(1)  * p1111)) ) 
 
       Derivative(i,4) &  ! Ye
-        = ( Interpolant(i) ) * alpha(4) &
+        = ( Interpolant(i) + Offset) * alpha(4) &
           * ( - (   (1.0_dp - delta(3)) * &
                           (1.0_dp - delta(2)) * (1.0_dp - delta(1)) * p0000   &
                   + (1.0_dp - delta(3)) * &
